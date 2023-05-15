@@ -1,10 +1,10 @@
 # automated_attacks
 automated attacks by scenario via Metasploit Framework and Python
 
-В файле attack_scenario.py находится скрипт, который автоматизирует определенный сценарий атаки. Краткая схема атаки расположена в файле attack.png
+The attack_scenario.py file contains a script that automates a specific attack scenario. A brief attack scheme is located in the attack.png file
 Сценарий:
 
-В файле install_mimi.py представлен скрипт автоматизированной загрузки Mimikatz.exe на машину жертвы при помощи Metasploit и уязвимости EnternalBlue. Возвращает вывод команды mimikaz "sekurlsa::logonPasswords".
+The install_mimi.py file contains a script for automatically downloading Mimikatz.exe to the victim machine using Metasploit and the EnternalBlue vulnerability. Returns the output of the mimikaz command "sekurlsa::logonPasswords"
 
-Для проведения автоматизированных атак необходимо запустить интерфейс msfrpcd, который буде прослушивать определенный порт и предоставлять клиентам, которые к нему подключены, RPC интерфейс к Metasploit Framework.
+To carry out automated attacks, you need to run the msfrpcd interface, which will listen on a specific port and provide clients that are connected to it with an RPC interface to the Metasploit Framework.
 
